@@ -94,7 +94,7 @@ class FindObject(Node):
         loc_msg = Point()
         loc_msg.x = float(px)
         loc_msg.y = float(py)
-        self.location_publisher.publish(msg)
+        self.location_publisher.publish(loc_msg)
         self.get_logger().info('Publishing: x=%.2f, y=%.2f' %(loc_msg.x, loc_msg.y))
 
         # if self._display_image:
