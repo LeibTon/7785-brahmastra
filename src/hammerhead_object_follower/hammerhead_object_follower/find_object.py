@@ -92,8 +92,8 @@ class FindObject(Node):
 
                     # cv2.circle(self._imgBGR, (cx, cy), 6, (0, 0, 255), -1)
         loc_msg = Point()
-        loc_msg.x = px
-        loc_msg.y = py
+        loc_msg.x = float(px)
+        loc_msg.y = float(py)
         self.location_publisher.publish(msg)
         self.get_logger().info('Publishing: x=%.2f, y=%.2f' %(loc_msg.x, loc_msg.y))
 
