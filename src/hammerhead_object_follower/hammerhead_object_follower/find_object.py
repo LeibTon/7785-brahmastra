@@ -86,8 +86,8 @@ class MinimalVideoSubscriber(Node):
                     px = cx - self.RESIZE_W / 2
                     py = cy - self.RESIZE_H / 2
 
-                    cv2.circle(self._imgBGR, (cx, cy), 6, (0, 0, 255), -1)
-
+                    # cv2.circle(self._imgBGR, (cx, cy), 6, (0, 0, 255), -1)
+        print(px, py)
         # if self._display_image:
         #     self.show_image(self._imgBGR)
 
