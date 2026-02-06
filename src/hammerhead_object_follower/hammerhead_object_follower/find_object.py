@@ -1,16 +1,18 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
+
+from geometry_msgs.msg import Point
 from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy, QoSHistoryPolicy
 
 import numpy as np
 import cv2
 
 
-class MinimalVideoSubscriber(Node):
+class FindObject(Node):
 
     def __init__(self):
-        super().__init__('minimal_video_subscriber')
+        super().__init__('find_object')
 
         # Parameters
         self.declare_parameter('show_image_bool', True)
@@ -52,6 +54,8 @@ class MinimalVideoSubscriber(Node):
             image_qos_profile
         )
 
+        self.location_publisher = self.create_publisher(Point, '/object_pixel', 10)
+
     def _image_callback(self, msg: CompressedImage):
 
         np_arr = np.frombuffer(msg.data, np.uint8)
@@ -87,7 +91,12 @@ class MinimalVideoSubscriber(Node):
                     py = cy - self.RESIZE_H / 2
 
                     # cv2.circle(self._imgBGR, (cx, cy), 6, (0, 0, 255), -1)
-        print(px, py)
+        loc_msg = Point()
+        loc_msg.x = px
+        loc_msg.y = py
+        self.location_publisher.publish(msg)
+        self.get_logger().info('Publishing: x=%.2f, y=%.2f' %(loc_msg.x, loc_msg.y))
+
         # if self._display_image:
         #     self.show_image(self._imgBGR)
 
@@ -128,10 +137,10 @@ def main():
     while rclpy.ok():
         rclpy.spin_once(video_subscriber)
 
-        if video_subscriber._display_image:
-            if video_subscriber.get_user_input() == ord('q'):
-                cv2.destroyAllWindows()
-                break
+        # if video_subscriber._display_image:
+        #     if video_subscriber.get_user_input() == ord('q'):
+        #         cv2.destroyAllWindows()
+        #         break
 
     rclpy.logging.get_logger("Camera Viewer Node Info...").info("Shutting Down")
 
