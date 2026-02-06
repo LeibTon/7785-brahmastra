@@ -15,7 +15,7 @@ class FindObject(Node):
         super().__init__('find_object')
 
         # Parameters
-        self.declare_parameter('show_image_bool', True)
+        self.declare_parameter('show_image_bool', False)
         self.declare_parameter('window_name', "Raw Image")
 
         self._display_image = bool(self.get_parameter('show_image_bool').value)
@@ -132,7 +132,7 @@ class FindObject(Node):
 
 def main():
     rclpy.init()
-    video_subscriber = MinimalVideoSubscriber()
+    video_subscriber = FindObject()
 
     while rclpy.ok():
         rclpy.spin_once(video_subscriber)
