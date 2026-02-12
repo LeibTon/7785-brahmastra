@@ -1,0 +1,6 @@
+source;share/hammerhead_object_follower/hook/pythonpath.ps1
+source;share/hammerhead_object_follower/hook/pythonpath.dsv
+source;share/hammerhead_object_follower/hook/pythonpath.sh
+source;share/hammerhead_object_follower/hook/ament_prefix_path.ps1
+source;share/hammerhead_object_follower/hook/ament_prefix_path.dsv
+source;share/hammerhead_object_follower/hook/ament_prefix_path.sh

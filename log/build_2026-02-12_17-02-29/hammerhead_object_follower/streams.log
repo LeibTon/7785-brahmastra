@@ -1,0 +1,43 @@
+[0.281s] Invoking command in '/home/aditya/brahmastra_ws/src/hammerhead_object_follower': PYTHONPATH=/home/aditya/brahmastra_ws/build/hammerhead_object_follower/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/aditya/brahmastra_ws/install/hammerhead_object_follower/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/hammerhead_object_follower build --build-base /home/aditya/brahmastra_ws/build/hammerhead_object_follower/build install --record /home/aditya/brahmastra_ws/build/hammerhead_object_follower/install.log --single-version-externally-managed install_data
+[0.389s] running egg_info
+[0.389s] creating ../../build/hammerhead_object_follower/hammerhead_object_follower.egg-info
+[0.390s] writing ../../build/hammerhead_object_follower/hammerhead_object_follower.egg-info/PKG-INFO
+[0.390s] writing dependency_links to ../../build/hammerhead_object_follower/hammerhead_object_follower.egg-info/dependency_links.txt
+[0.390s] writing entry points to ../../build/hammerhead_object_follower/hammerhead_object_follower.egg-info/entry_points.txt
+[0.390s] writing requirements to ../../build/hammerhead_object_follower/hammerhead_object_follower.egg-info/requires.txt
+[0.390s] writing top-level names to ../../build/hammerhead_object_follower/hammerhead_object_follower.egg-info/top_level.txt
+[0.390s] writing manifest file '../../build/hammerhead_object_follower/hammerhead_object_follower.egg-info/SOURCES.txt'
+[0.390s] reading manifest file '../../build/hammerhead_object_follower/hammerhead_object_follower.egg-info/SOURCES.txt'
+[0.390s] writing manifest file '../../build/hammerhead_object_follower/hammerhead_object_follower.egg-info/SOURCES.txt'
+[0.391s] running build
+[0.391s] running build_py
+[0.391s] creating /home/aditya/brahmastra_ws/build/hammerhead_object_follower/build
+[0.391s] creating /home/aditya/brahmastra_ws/build/hammerhead_object_follower/build/lib
+[0.391s] creating /home/aditya/brahmastra_ws/build/hammerhead_object_follower/build/lib/hammerhead_object_follower
+[0.391s] copying hammerhead_object_follower/rotate_robot.py -> /home/aditya/brahmastra_ws/build/hammerhead_object_follower/build/lib/hammerhead_object_follower
+[0.391s] copying hammerhead_object_follower/__init__.py -> /home/aditya/brahmastra_ws/build/hammerhead_object_follower/build/lib/hammerhead_object_follower
+[0.391s] copying hammerhead_object_follower/find_object.py -> /home/aditya/brahmastra_ws/build/hammerhead_object_follower/build/lib/hammerhead_object_follower
+[0.391s] running install
+[0.391s] running install_lib
+[0.391s] creating /home/aditya/brahmastra_ws/install/hammerhead_object_follower/lib/python3.10/site-packages/hammerhead_object_follower
+[0.391s] copying /home/aditya/brahmastra_ws/build/hammerhead_object_follower/build/lib/hammerhead_object_follower/rotate_robot.py -> /home/aditya/brahmastra_ws/install/hammerhead_object_follower/lib/python3.10/site-packages/hammerhead_object_follower
+[0.391s] copying /home/aditya/brahmastra_ws/build/hammerhead_object_follower/build/lib/hammerhead_object_follower/__init__.py -> /home/aditya/brahmastra_ws/install/hammerhead_object_follower/lib/python3.10/site-packages/hammerhead_object_follower
+[0.391s] copying /home/aditya/brahmastra_ws/build/hammerhead_object_follower/build/lib/hammerhead_object_follower/find_object.py -> /home/aditya/brahmastra_ws/install/hammerhead_object_follower/lib/python3.10/site-packages/hammerhead_object_follower
+[0.392s] byte-compiling /home/aditya/brahmastra_ws/install/hammerhead_object_follower/lib/python3.10/site-packages/hammerhead_object_follower/rotate_robot.py to rotate_robot.cpython-310.pyc
+[0.392s] byte-compiling /home/aditya/brahmastra_ws/install/hammerhead_object_follower/lib/python3.10/site-packages/hammerhead_object_follower/__init__.py to __init__.cpython-310.pyc
+[0.392s] byte-compiling /home/aditya/brahmastra_ws/install/hammerhead_object_follower/lib/python3.10/site-packages/hammerhead_object_follower/find_object.py to find_object.cpython-310.pyc
+[0.392s] running install_data
+[0.393s] creating /home/aditya/brahmastra_ws/install/hammerhead_object_follower/share/ament_index
+[0.393s] creating /home/aditya/brahmastra_ws/install/hammerhead_object_follower/share/ament_index/resource_index
+[0.393s] creating /home/aditya/brahmastra_ws/install/hammerhead_object_follower/share/ament_index/resource_index/packages
+[0.393s] copying resource/hammerhead_object_follower -> /home/aditya/brahmastra_ws/install/hammerhead_object_follower/share/ament_index/resource_index/packages
+[0.393s] copying package.xml -> /home/aditya/brahmastra_ws/install/hammerhead_object_follower/share/hammerhead_object_follower
+[0.393s] creating /home/aditya/brahmastra_ws/install/hammerhead_object_follower/share/hammerhead_object_follower/launch
+[0.393s] copying launch/track_yellow.py -> /home/aditya/brahmastra_ws/install/hammerhead_object_follower/share/hammerhead_object_follower/launch
+[0.393s] running install_egg_info
+[0.394s] Copying ../../build/hammerhead_object_follower/hammerhead_object_follower.egg-info to /home/aditya/brahmastra_ws/install/hammerhead_object_follower/lib/python3.10/site-packages/hammerhead_object_follower-0.0.0-py3.10.egg-info
+[0.394s] running install_scripts
+[0.405s] Installing find_object script to /home/aditya/brahmastra_ws/install/hammerhead_object_follower/lib/hammerhead_object_follower
+[0.406s] Installing rotate_robot script to /home/aditya/brahmastra_ws/install/hammerhead_object_follower/lib/hammerhead_object_follower
+[0.406s] writing list of installed files to '/home/aditya/brahmastra_ws/build/hammerhead_object_follower/install.log'
+[0.418s] Invoked command in '/home/aditya/brahmastra_ws/src/hammerhead_object_follower' returned '0': PYTHONPATH=/home/aditya/brahmastra_ws/build/hammerhead_object_follower/prefix_override:/usr/lib/python3/dist-packages/colcon_core/task/python/colcon_distutils_commands:/home/aditya/brahmastra_ws/install/hammerhead_object_follower/lib/python3.10/site-packages:${PYTHONPATH} /usr/bin/python3 -W ignore:setup.py install is deprecated -W ignore:easy_install command is deprecated setup.py egg_info --egg-base ../../build/hammerhead_object_follower build --build-base /home/aditya/brahmastra_ws/build/hammerhead_object_follower/build install --record /home/aditya/brahmastra_ws/build/hammerhead_object_follower/install.log --single-version-externally-managed install_data
