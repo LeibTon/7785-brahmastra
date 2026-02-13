@@ -54,6 +54,8 @@ class FindObject(Node):
             image_qos_profile
         )
 
+        self._video_publisher = self.create_publisher(CompressedImage, '/debug_img/compressed', 10)
+
         self.location_publisher = self.create_publisher(Point, '/object_pixel', 10)
 
     def _image_callback(self, msg: CompressedImage):
@@ -90,15 +92,37 @@ class FindObject(Node):
                     px = cx - self.RESIZE_W / 2
                     py = cy - self.RESIZE_H / 2
 
-                    # cv2.circle(self._imgBGR, (cx, cy), 6, (0, 0, 255), -1)
+                    # Draw contour + bounding box + centroid
+                    cv2.drawContours(frame, [cnt], -1, (0, 255, 0), 2)
+                    x, y, w, h = cv2.boundingRect(cnt)
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), (255, 0, 0), 2)
+                    cv2.circle(frame, (cx, cy), 6, (0, 0, 255), -1)
+                    cv2.putText(frame, f"({cx}, {cy})", (cx + 10, cy - 10),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+            if not found:
+                cv2.putText(frame, "LOST", (20, 40),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2)
+        
+
+
         loc_msg = Point()
         loc_msg.x = float(px)
         loc_msg.y = float(py)
         self.location_publisher.publish(loc_msg)
         self.get_logger().info('Publishing: x=%.2f, y=%.2f' %(loc_msg.x, loc_msg.y))
 
-        # if self._display_image:
-        #     self.show_image(self._imgBGR)
+        out = CompressedImage()
+        out.header = msg.header            # keep same timestamp + frame_id
+        out.format = msg.format or "jpeg"  # or force "jpeg"
+
+        # choose encoding based on desired output format
+        ext = ".jpg" if out.format.lower() in ("jpeg", "jpg") else ".png"
+        params = [int(cv2.IMWRITE_JPEG_QUALITY), 80] if ext == ".jpg" else [int(cv2.IMWRITE_PNG_COMPRESSION), 3]
+
+        ok, enc = cv2.imencode(ext, frame, params)
+        if ok:
+            out.data = enc.tobytes()
+            self._video_publisher.publish(out)
 
     def show_image(self, img):
         cv2.imshow(self._titleOriginal, img)

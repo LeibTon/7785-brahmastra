@@ -21,17 +21,21 @@ def generate_launch_description():
         name='rotate_robot',
         output='screen'
     )
-    # --- include: ros2 launch turtlebot3_bringup camera.robot.launch.py ---
-    tb3_bringup_dir = get_package_share_directory('turtlebot3_bringup')
-    camera_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(tb3_bringup_dir, 'launch', 'camera_robot.launch.py')
-        ),
-        # Optional: pass launch args if that launch file expects them
-        # launch_arguments={
-        #     'use_sim_time': 'false',
-        # }.items(),
-    )
+    try:
+        # --- include: ros2 launch turtlebot3_bringup camera.robot.launch.py ---
+        tb3_bringup_dir = get_package_share_directory('turtlebot3_bringup')
+        camera_launch = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(tb3_bringup_dir, 'launch', 'camera_robot.launch.py')
+            ),
+            # Optional: pass launch args if that launch file expects them
+            # launch_arguments={
+            #     'use_sim_time': 'false',
+            # }.items(),
+        )
+    except:
+        print("Didn't launch turtle_bringup...")
+
 
     return LaunchDescription([
         camera_launch,
