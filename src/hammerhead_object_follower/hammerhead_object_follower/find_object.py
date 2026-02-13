@@ -66,8 +66,8 @@ class FindObject(Node):
         if self._imgBGR is None:
             return
 
-        self._imgBGR = cv2.resize(self._imgBGR, (self.RESIZE_W, self.RESIZE_H))
-        hsv = cv2.cvtColor(self._imgBGR, cv2.COLOR_BGR2HSV)
+        frame = cv2.resize(self._imgBGR, (self.RESIZE_W, self.RESIZE_H))
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
         mask = cv2.inRange(hsv, self.LOWER, self.UPPER)
 
