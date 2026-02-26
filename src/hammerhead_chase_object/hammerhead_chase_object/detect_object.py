@@ -3,7 +3,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
 
 from geometry_msgs.msg import Point
-from rclpy.qos import QoSProfile, QoSDurabilityPolicy, QoSReliabilityPolicy, QoSHistoryPolicy
+from rclpy.qos import qos_profile_sensor_data
 
 import numpy as np
 import cv2
@@ -39,19 +39,11 @@ class DetectObject(Node):
 
         self.kernel = np.ones((self.KERNEL_SIZE, self.KERNEL_SIZE), np.uint8)
 
-        # QoS Profile
-        image_qos_profile = QoSProfile(
-            reliability=QoSReliabilityPolicy.BEST_EFFORT,
-            history=QoSHistoryPolicy.KEEP_LAST,
-            durability=QoSDurabilityPolicy.VOLATILE,
-            depth=1
-        )
-
         self._video_subscriber = self.create_subscription(
             CompressedImage,
             '/image_raw/compressed',
             self._image_callback,
-            image_qos_profile
+            qos_profile_sensor_data
         )
 
         self._video_publisher = self.create_publisher(CompressedImage, '/debug_img/compressed', 10)
