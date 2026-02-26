@@ -83,8 +83,8 @@ class DetectObject(Node):
 
                 if cxcy is not None:
                     cx, cy = cxcy
-                    px = cx - self.RESIZE_W / 2
-                    py = cy - self.RESIZE_H / 2
+                    px = self.RESIZE_W / 2 - cx
+                    py = self.RESIZE_H / 2 - cy
                     pz = 1.0 # valid flag
 
                     # Draw contour + bounding box + centroid

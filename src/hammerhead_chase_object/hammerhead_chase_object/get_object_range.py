@@ -17,7 +17,7 @@ class GetObjectRange(Node):
             LaserScan, '/scan', self.lidar_callback, qos_profile_sensor_data
         )
 
-        self.timer = self.create_timer(0.1, self.publish_state) # Publish state at 10 Hz
+        self.timer = self.create_timer(0.01, self.publish_state) # Publish state at 10 Hz
 
         self.WIDTH_IMAGE = 640
         self.FOV = 62.2 * 3.14159/180 # horizontal FOV of the camera in radians
@@ -51,15 +51,14 @@ class GetObjectRange(Node):
         else:
             self.distance_to_object = 0.0 
             self.valid_lidar = 0.0
-            
+
     def listener_callback(self, msg: Point):
         # find_object already publishes: error_x = object_x - image_center
         error_x = msg.x
         self.valid_ang = msg.z # valid flag from detect_object
-        error_rad = -(error_x / self.WIDTH_IMAGE) * self.FOV # Convert pixel error to radians (negated to match LIDAR convention)
-        self.pos_x = error_x
+        error_rad = (error_x / self.WIDTH_IMAGE) * self.FOV # Convert pixel error to radians
         self.angle_to_object = error_rad
-        # Normalize angle to [0, 2π] range to match LIDAR convention
+        # Normalize angle to [-pi, pi] range
         while self.angle_to_object > 3.14159:
             self.angle_to_object -= 2*3.14159
         while self.angle_to_object < -3.14159:

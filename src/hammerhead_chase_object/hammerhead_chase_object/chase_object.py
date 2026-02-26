@@ -2,9 +2,6 @@ import math
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, Point
-import matplotlib.pyplot as plt
-from collections import deque
-from datetime import datetime
 
 
 def clamp(x, lo, hi):
@@ -49,10 +46,10 @@ class ChaseObject(Node):
         self.declare_parameter('max_lin', 0.15)             # 0.15  m/s (Burger safe-ish) Starting with zero so we can fine tune angle PID first
         self.declare_parameter('max_ang', 1.2)              # rad/s
 
-        # Start with P or PD; add I only if you see steady-state error.
-        self.declare_parameter('kp_lin', 0.04)
+        # Start with P or PD
+        self.declare_parameter('kp_lin', 0.5)
         self.declare_parameter('ki_lin', 0.0)
-        self.declare_parameter('kd_lin', 0.005)
+        self.declare_parameter('kd_lin', 0.1)
         self.declare_parameter('i_lim_lin', 0.5)
 
         self.declare_parameter('kp_ang', 3.0)
@@ -60,7 +57,7 @@ class ChaseObject(Node):
         self.declare_parameter('kd_ang', 0.1)
         self.declare_parameter('i_lim_ang', 1.0)
 
-        self.declare_parameter('angle_deadband', 0.03)      # rad (~1.7 deg)
+        self.declare_parameter('angle_deadband', 0.06)      # rad (~1.7 deg)
         self.declare_parameter('range_deadband', 0.05)      # m
         self.declare_parameter('lost_timeout', 0.5)         # sec
         self.declare_parameter('control_rate', 30.0)        # Hz
@@ -103,115 +100,16 @@ class ChaseObject(Node):
         self.timer = self.create_timer(self.dt_cmd, self.control_loop)
 
         self.get_logger().info('ChaseObject running: sub /robot_state (Point), pub /cmd_vel')
-        
-        # Data storage for plotting (received robot state data and commands)
-        self.data_obj_angles = deque(maxlen=1000)
-        self.data_obj_ranges = deque(maxlen=1000)
-        self.data_lin_vel = deque(maxlen=1000)
-        self.data_ang_vel = deque(maxlen=1000)
-        self.data_ang_err = deque(maxlen=1000)
-        self.data_rng_err = deque(maxlen=1000)
-        self.data_timestamps = deque(maxlen=1000)
-        self.start_time = datetime.now()
 
     def obj_cb(self, msg: Point):
         self.obj_angle = float(msg.x)
         self.obj_range = float(msg.y)
         self.obj_valid = (msg.z >= 0.5) and math.isfinite(self.obj_angle) and math.isfinite(self.obj_range)
         self.last_msg_time = self.get_clock().now()
-        
-        # Store received data for plotting
-        elapsed = (datetime.now() - self.start_time).total_seconds()
-        self.data_obj_angles.append(self.obj_angle)
-        self.data_obj_ranges.append(self.obj_range)
-        self.data_timestamps.append(elapsed)
 
     def stop_robot(self):
         t = Twist()
         self.cmd_pub.publish(t)
-    
-    def plot_data(self):
-        """Plot received robot_state data and sent command data."""
-        if not self.data_timestamps:
-            self.get_logger().info('No data to plot')
-            return
-        
-        plt.figure(figsize=(16, 10))
-        
-        # Plot received object angle
-        plt.subplot(2, 3, 1)
-        plt.plot(self.data_timestamps, self.data_obj_angles, 'b-', label='Object Angle')
-        plt.axhline(y=0, color='r', linestyle='--', alpha=0.5, label='Zero')
-        plt.xlabel('Time (s)')
-        plt.ylabel('Angle (rad)')
-        plt.title('Received Object Angle Over Time')
-        plt.grid(True)
-        plt.legend()
-        
-        # Plot received object range
-        plt.subplot(2, 3, 2)
-        plt.plot(self.data_timestamps, self.data_obj_ranges, 'g-', label='Object Range')
-        plt.axhline(y=self.desired_distance, color='r', linestyle='--', label=f'Desired ({self.desired_distance:.2f}m)')
-        plt.xlabel('Time (s)')
-        plt.ylabel('Range (m)')
-        plt.title('Received Object Range Over Time')
-        plt.grid(True)
-        plt.legend()
-        
-        # Plot linear velocity command
-        plt.subplot(2, 3, 3)
-        plt.plot(self.data_timestamps, self.data_lin_vel, 'b-', label='Linear Velocity')
-        plt.axhline(y=0, color='k', linestyle='-', alpha=0.3)
-        plt.xlabel('Time (s)')
-        plt.ylabel('Velocity (m/s)')
-        plt.title('Linear Velocity Command Over Time')
-        plt.grid(True)
-        plt.legend()
-        
-        # Plot angular velocity command
-        plt.subplot(2, 3, 4)
-        plt.plot(self.data_timestamps, self.data_ang_vel, 'r-', label='Angular Velocity')
-        plt.axhline(y=0, color='k', linestyle='-', alpha=0.3)
-        plt.xlabel('Time (s)')
-        plt.ylabel('Velocity (rad/s)')
-        plt.title('Angular Velocity Command Over Time')
-        plt.grid(True)
-        plt.legend()
-        
-        # Plot angle and range errors
-        plt.subplot(2, 3, 5)
-        ax1 = plt.gca()
-        ax1.plot(self.data_timestamps, self.data_ang_err, 'g-', label='Angle Error', alpha=0.7)
-        ax1.set_xlabel('Time (s)')
-        ax1.set_ylabel('Angle Error (rad)', color='g')
-        ax1.tick_params(axis='y', labelcolor='g')
-        ax1.grid(True)
-        
-        ax2 = ax1.twinx()
-        ax2.plot(self.data_timestamps, self.data_rng_err, 'm-', label='Range Error', alpha=0.7)
-        ax2.set_ylabel('Range Error (m)', color='m')
-        ax2.tick_params(axis='y', labelcolor='m')
-        
-        plt.title('Both Errors Over Time')
-        ax1.legend(loc='upper left')
-        ax2.legend(loc='upper right')
-        
-        # Phase plot: angular velocity vs linear velocity
-        plt.subplot(2, 3, 6)
-        plt.plot(self.data_ang_vel, self.data_lin_vel, 'c-', alpha=0.7, label='Phase')
-        if len(self.data_ang_vel) > 0:
-            plt.scatter(self.data_ang_vel[-1], self.data_lin_vel[-1], color='r', s=100, label='End', zorder=5)
-        plt.xlabel('Angular Velocity (rad/s)')
-        plt.ylabel('Linear Velocity (m/s)')
-        plt.title('Phase Plot: Angular vs Linear Velocity')
-        plt.grid(True)
-        plt.legend()
-        
-        plt.tight_layout()
-        filename = f'chase_object_plot_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
-        plt.savefig(filename)
-        self.get_logger().info(f'Plot saved to {filename}')
-        plt.show()
 
     def control_loop(self):
         now = self.get_clock().now()
@@ -235,8 +133,7 @@ class ChaseObject(Node):
             ang_err = 0.0
         if abs(rng_err) < self.range_deadband:
             rng_err = 0.0
-
-        # Control (note sign: if your robot turns the wrong way, flip angular sign)
+        # PID control
         u_ang = self.pid_ang.update(ang_err, dt)
         u_lin = self.pid_lin.update(rng_err, dt)
 
@@ -246,30 +143,12 @@ class ChaseObject(Node):
 
         self.get_logger().info(f'Control: ang_err={ang_err:.3f} rad, rng_err={rng_err:.3f} m -> cmd_lin={u_lin:.3f} m/s, cmd_ang={twist.angular.z:.3f} rad/s')
 
-        # Store control data for plotting
-        elapsed = (datetime.now() - self.start_time).total_seconds()
-        self.data_lin_vel.append(twist.linear.x)
-        self.data_ang_vel.append(twist.angular.z)
-        self.data_ang_err.append(ang_err)
-        self.data_rng_err.append(rng_err)
-
         self.cmd_pub.publish(twist)
 
 
 def main(args=None):
     rclpy.init(args=args)
     node = ChaseObject()
-    
-    def shutdown_handler(signum, frame):
-        print('\nShutting down and generating plots...')
-        node.plot_data()
-        node.destroy_node()
-        rclpy.shutdown()
-        exit(0)
-    
-    import signal
-    signal.signal(signal.SIGINT, shutdown_handler)
-    
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
