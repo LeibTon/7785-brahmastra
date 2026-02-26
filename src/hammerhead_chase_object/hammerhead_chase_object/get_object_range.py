@@ -23,6 +23,7 @@ class GetObjectRange(Node):
         self.FOV = 62.2 * 3.14159/180 # horizontal FOV of the camera in radians
 
         self.angle_to_object = 0.0
+        self.distance_to_object = 0.0
         self.get_logger().info('GetObjectRange listening to /scan and publishing /position and angle of the object.')
     
     def lidar_callback(self, msg: LaserScan):
@@ -33,6 +34,10 @@ class GetObjectRange(Node):
         index = round((self.angle_to_object - angle_min) / angle_increment)
         if 0 <= index < len(ranges):
             distance_to_object = ranges[index]
+            # check nan and inf
+            if not (math.isfinite(distance_to_object) and distance_to_object >= msg.range_min and distance_to_object <= msg.range_max):
+                distance_to_object = -1.0 # invalid distance
+            self.distance_to_object = distance_to_object
             self.get_logger().info(f'Angle to object: {self.angle_to_object:.2f} rad, Distance to object: {distance_to_object:.2f} m')
         else:
             self.get_logger().warn('Calculated index for LiDAR range is out of bounds.')
@@ -51,7 +56,11 @@ class GetObjectRange(Node):
             self.angle_to_object += 2*3.14159
     
     def publish_state(self):
-        print(self.angle_to_object)
+        msg = Point()
+        msg.x = self.angle_to_object
+        msg.y = self.distance_to_object
+        msg.z = 1.0 if self.distance_to_object > 0 else 0.0 # valid flag
+        self.state_pub.publish(msg)
 
 
 def main(args=None):
