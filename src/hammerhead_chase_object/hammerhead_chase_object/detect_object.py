@@ -57,6 +57,7 @@ class DetectObject(Node):
         self._video_publisher = self.create_publisher(CompressedImage, '/debug_img/compressed', 10)
 
         self.location_publisher = self.create_publisher(Point, '/object_pixel', 10)
+        self.get_logger().info('DetectObject listening to /image_raw/compressed and publishing /object_pixel.')
 
     def _image_callback(self, msg: CompressedImage):
 
