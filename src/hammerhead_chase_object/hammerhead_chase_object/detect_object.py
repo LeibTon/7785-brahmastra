@@ -70,8 +70,9 @@ class DetectObject(Node):
         cnt = self.find_largest_contour(mask)
 
         found = False
-        px = 0
-        py = 0
+        px = 0.0
+        py = 0.0
+        pz = 0.0 # valid flag, set to 1.0 if valid, else 0.0
 
         if cnt is not None:
             area = cv2.contourArea(cnt)
@@ -84,6 +85,7 @@ class DetectObject(Node):
                     cx, cy = cxcy
                     px = cx - self.RESIZE_W / 2
                     py = cy - self.RESIZE_H / 2
+                    pz = 1.0 # valid flag
 
                     # Draw contour + bounding box + centroid
                     cv2.drawContours(frame, [cnt], -1, (0, 255, 0), 2)
@@ -101,6 +103,7 @@ class DetectObject(Node):
         loc_msg = Point()
         loc_msg.x = float(px)
         loc_msg.y = float(py)
+        loc_msg.z = float(pz)
         self.location_publisher.publish(loc_msg)
         self.get_logger().info('Publishing: x=%.2f, y=%.2f' %(loc_msg.x, loc_msg.y))
 
