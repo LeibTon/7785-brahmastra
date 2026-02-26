@@ -60,7 +60,7 @@ class ChaseObject(Node):
         self.declare_parameter('angle_deadband', 0.06)      # rad (~1.7 deg)
         self.declare_parameter('range_deadband', 0.05)      # m
         self.declare_parameter('lost_timeout', 0.5)         # sec
-        self.declare_parameter('control_rate', 30.0)        # Hz
+        self.declare_parameter('control_rate', 100.0)        # Hz
 
         self.desired_distance = float(self.get_parameter('desired_distance').value)
         self.max_lin = float(self.get_parameter('max_lin').value)
