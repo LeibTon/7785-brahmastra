@@ -1,78 +1,70 @@
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Point, Twist
 from sensor_msgs.msg import LaserScan
+from geometry_msgs.msg import Point
 from rclpy.qos import qos_profile_sensor_data
 import math
+
 
 class GetObjectRange(Node):
     def __init__(self):
         super().__init__('get_object_range')
 
-        self.state_pub = self.create_publisher(Point, '/robot_state', 10)
-        self.object_sub = self.create_subscription(
-            Point, '/object_pixel', self.listener_callback, 10
+        self.scan_sub = self.create_subscription(
+            LaserScan,
+            '/scan',
+            self.scan_callback,
+            qos_profile_sensor_data
         )
-        self.lidar_sub = self.create_subscription(
-            LaserScan, '/scan', self.lidar_callback, qos_profile_sensor_data
-        )
 
-        self.timer = self.create_timer(0.01, self.publish_state) # Publish state at 10 Hz
+        self.object_pub = self.create_publisher(Point, '/object_location', 10)
 
-        self.WIDTH_IMAGE = 640
-        self.FOV = 62.2 * 3.14159/180 # horizontal FOV of the camera in radians
+        # Only search in a front-facing sector
+        self.front_angle_min = math.radians(-30.0)
+        self.front_angle_max = math.radians(30.0)
 
-        self.angle_to_object = 0.0
-        self.valid_ang = 0.0
-        self.distance_to_object = 0.0
-        self.valid_lidar = 0.0
-        self.get_logger().info('GetObjectRange listening to /scan and publishing /position and angle of the object.')
-    
-    def lidar_callback(self, msg: LaserScan):
-        if msg.angle_increment == 0.0:
-            return  # Prevent division by zero if message is malformed
-            
-        angle_min = msg.angle_min
-        angle_increment = msg.angle_increment
-        
-        # Calculate the angle difference relative to angle_min
-        # Using modulo 2*pi handles wrap-around, ensuring the difference is always positive
-        angle_diff = (self.angle_to_object - angle_min) % (2 * math.pi)
-        
-        # Calculate index and wrap it around the array length just in case
-        index = int(round(angle_diff / angle_increment)) % len(msg.ranges)
-        
-        distance_to_object = msg.ranges[index]
-        
-        # Check if the LiDAR reading is valid (not inf, nan, and within physical sensor bounds)
-        if math.isfinite(distance_to_object) and msg.range_min <= distance_to_object <= msg.range_max:
-            self.distance_to_object = distance_to_object
-            self.valid_lidar = 1.0
+        # Ignore garbage close returns and anything too far away
+        self.min_valid_range = 0.05
+        self.max_valid_range = 1.0
+
+        self.get_logger().info('getObjectRange listening to /scan and publishing /object_location')
+
+    def scan_callback(self, msg: LaserScan):
+        closest_range = float('inf')
+        closest_angle = None
+
+        for i, r in enumerate(msg.ranges):
+            angle = msg.angle_min + i * msg.angle_increment
+
+            # Only inspect the forward sector
+            if angle < self.front_angle_min or angle > self.front_angle_max:
+                continue
+
+            # Reject invalid measurements
+            if math.isinf(r) or math.isnan(r):
+                continue
+
+            if r < self.min_valid_range or r > self.max_valid_range:
+                continue
+
+            if r < closest_range:
+                closest_range = r
+                closest_angle = angle
+
+        obstacle_msg = Point()
+
+        # If no obstacle found in the front sector, publish a "far away" marker
+        if closest_angle is None:
+            obstacle_msg.x = 999.0
+            obstacle_msg.y = 0.0
+            obstacle_msg.z = 0.0
         else:
-            self.distance_to_object = 0.0 
-            self.valid_lidar = 0.0
+            obstacle_msg.x = closest_range * math.cos(closest_angle)
+            obstacle_msg.y = closest_range * math.sin(closest_angle)
+            obstacle_msg.z = 0.0
 
-    def listener_callback(self, msg: Point):
-        # find_object already publishes: error_x = object_x - image_center
-        error_x = msg.x
-        self.valid_ang = msg.z # valid flag from detect_object
-        error_rad = (error_x / self.WIDTH_IMAGE) * self.FOV # Convert pixel error to radians
-        self.angle_to_object = error_rad
-        # Normalize angle to [-pi, pi] range
-        while self.angle_to_object > 3.14159:
-            self.angle_to_object -= 2*3.14159
-        while self.angle_to_object < -3.14159:
-            self.angle_to_object += 2*3.14159
-    
-    def publish_state(self):
-        msg = Point()
-        msg.x = self.angle_to_object
-        msg.y = self.distance_to_object
-        msg.z = 1.0 if (self.valid_ang > 0.5 and self.valid_lidar > 0.5) else 0.0 # valid flag
-        self.state_pub.publish(msg)
-
-        self.get_logger().info(f'Published state: angle={self.angle_to_object:.3f} rad, distance={self.distance_to_object:.3f} m, valid={msg.z > 0}')
-
+        self.object_pub.publish(obstacle_msg)
+        self.get_logger().info(f'obstacle: x={obstacle_msg.x:.3f}, y={obstacle_msg.y:.3f}')
 
 def main(args=None):
     rclpy.init(args=args)
