@@ -31,9 +31,9 @@ class WaypointNavigator(Node):
 
         # Waypoints: (x, y, yaw in radians)
         self.waypoints = [
-            (1.0, 0.0, 0.0),
-            (2.0, 0.5, math.pi / 2),
-            (1.5, -0.5, math.pi)
+            (1.3991, 0.6282, 0.0),
+            (0.457, 1.6008, 0.0),
+            (1.9889, 0.7515, 0.0)
         ]
 
         self.current_waypoint_idx = 0
