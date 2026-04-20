@@ -22,7 +22,7 @@ LINEAR_SPEED   = 0.12   # m/s forward speed
 
 
 KP_CENTER = 1      # Proportional gain for centering (tuned down for smoother turns)
-KD_CENTER = 0.3     # Derivative gain for centering (tune as needed)
+KD_CENTER = 0.8     # Derivative gain for centering (tune as needed)
 SIDE_ANG = 45.0      # Degrees for left/right wall detection
 SIDE_WIDTH = 10.0    # +/- degrees window for averaging side distances
 MAX_WALL_DIST = 2.0  # Max distance to consider a wall present
