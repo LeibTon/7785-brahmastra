@@ -68,28 +68,23 @@ class MazeNavigator(Node):
         sign = msg.data
         if sign == 0:
             self._spin_attempts += 1
-            self.get_logger().info(f'Empty sign, spin attempt {self._spin_attempts}/24')
-            if self._spin_attempts >= 24:
-                # Full 360° checked, no sign — drive to next wall
-                self.get_logger().warn('No sign after full rotation, driving on.')
-                self._spin_attempts = 0
+            self.get_logger().info(f'Empty sign, spin attempt {self._spin_attempts}')
+            if self._spin_attempts > 4:
+                self.get_logger().warn('No sign found, driving on.')
                 self._drive()
             else:
-                # Spin 15° right and try again
-                self._state = 'SPIN_SEARCH'
-                msg15 = Int32(); msg15.data = 6   # class 6 = 15° right (handled in turn_controller)
-                self._sign_pub.publish(msg15)
+                self._turn(2)   # rotate 90° right to look at next wall
         else:
-            self._spin_attempts = 0
             self._turn(sign)
 
     def _turn_done_cb(self, msg: Bool):
         if not msg.data:
             return
-        if self._state == 'SPIN_SEARCH':
-            self._detect()   # after each 45° spin, try detecting again
-        elif self._state == 'TURN':
-            self._drive()
+        if self._state == 'TURN':
+            if self._spin_attempts > 0:
+                self._detect()   # after spin-search turn, try detecting again
+            else:
+                self._drive()
 
     def _goal_reached_cb(self, msg: Bool):
         if msg.data:
