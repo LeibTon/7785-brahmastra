@@ -26,16 +26,18 @@ from std_msgs.msg import Bool, Int32
 TURN_SPEED = 0.5   # rad/s
 
 TURN_DURATION = {
-    1:  math.pi / 2 / TURN_SPEED,   # 90° left
-    2:  math.pi / 2 / TURN_SPEED,   # 90° right
-    3:  math.pi     / TURN_SPEED,   # 180°
-    4:  math.pi     / TURN_SPEED,   # 180°
+    1:  math.pi / 2   / TURN_SPEED,   # 90° left
+    2:  math.pi / 2   / TURN_SPEED,   # 90° right
+    3:  math.pi       / TURN_SPEED,   # 180°
+    4:  math.pi       / TURN_SPEED,   # 180°
+    6:  math.pi / 4   / TURN_SPEED,   # 45° right (spin-search)
 }
 TURN_DIRECTION = {
     1:  1.0,   # CCW (+z)
     2: -1.0,   # CW  (-z)
     3:  1.0,
     4:  1.0,
+    6: -1.0,   # CW  (-z)
 }
 
 
