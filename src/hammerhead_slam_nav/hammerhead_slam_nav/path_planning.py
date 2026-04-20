@@ -1,138 +1,109 @@
-import math
 import rclpy
 from rclpy.node import Node
+from rclpy.action import ActionClient
 
-from geometry_msgs.msg import PoseStamped, PoseWithCovarianceStamped
-from std_msgs.msg import Header
+from action_msgs.msg import GoalStatus
+from geometry_msgs.msg import PoseStamped
+from nav2_msgs.action import FollowWaypoints
 
 
-class WaypointNavigator(Node):
+class Nav2ActionClient(Node):
     def __init__(self):
-        super().__init__('waypoint_navigator')
+        super().__init__('nav2_action_client')
+        self.action_client = ActionClient(self, FollowWaypoints, 'follow_waypoints')
 
-        # Publisher to Nav2 goal topic
-        self.goal_pub = self.create_publisher(PoseStamped, '/goal_pose', 10)
-
-        # Subscriber to AMCL pose estimate
-        self.amcl_sub = self.create_subscription(
-            PoseWithCovarianceStamped,
-            '/amcl_pose',
-            self.amcl_callback,
-            10
-        )
-
-        # Timer for checking progress
-        self.timer = self.create_timer(0.2, self.control_loop)
-
-        # Current robot pose
-        self.current_x = None
-        self.current_y = None
-        self.current_yaw = None
-
-        # Waypoints: (x, y, yaw in radians)
+        # Waypoints are position-only; orientation is fixed to (0, 0, 0, 1).
         self.waypoints = [
-            (1.3991, 0.6282, 0.0),
-            (0.457, 1.6008, 0.0),
-            (1.9889, 0.7515, 0.0)
+            (1.3991, 0.6282),
+            (0.4570, 1.6008),
+            (1.9889, 0.7515),
         ]
+        self.current_waypoint_index = 0
 
-        self.current_waypoint_idx = 0
-        self.goal_active = False
+        self.get_logger().info('Waiting for Nav2 FollowWaypoints action server...')
+        self.action_client.wait_for_server()
+        self.get_logger().info('Action server available. Starting waypoint navigation.')
 
-        # Tolerances
-        self.position_tolerance = 0.20   # meters
-        self.yaw_tolerance = 0.30        # radians
-
-        self.get_logger().info('Waypoint navigator started.')
-
-    def amcl_callback(self, msg: PoseWithCovarianceStamped):
-        self.current_x = msg.pose.pose.position.x
-        self.current_y = msg.pose.pose.position.y
-
-        q = msg.pose.pose.orientation
-        self.current_yaw = self.quaternion_to_yaw(q.x, q.y, q.z, q.w)
-
-    def control_loop(self):
-        # Wait until AMCL pose is available
-        if self.current_x is None or self.current_y is None or self.current_yaw is None:
+    def send_next_waypoint(self):
+        if self.current_waypoint_index >= len(self.waypoints):
+            self.get_logger().info('All waypoints completed successfully.')
             return
 
-        # If all waypoints are done
-        if self.current_waypoint_idx >= len(self.waypoints):
-            if self.goal_active:
-                self.get_logger().info('All waypoints completed.')
-                self.goal_active = False
-            return
+        x, y = self.waypoints[self.current_waypoint_index]
 
-        # If no goal is active, publish the next one
-        if not self.goal_active:
-            self.publish_goal(*self.waypoints[self.current_waypoint_idx])
-            self.goal_active = True
-            return
+        goal_msg = FollowWaypoints.Goal()
+        waypoint = PoseStamped()
+        waypoint.header.frame_id = 'map'
+        waypoint.header.stamp = self.get_clock().now().to_msg()
+        waypoint.pose.position.x = x
+        waypoint.pose.position.y = y
+        waypoint.pose.orientation.x = 0.0
+        waypoint.pose.orientation.y = 0.0
+        waypoint.pose.orientation.z = 0.0
+        waypoint.pose.orientation.w = 1.0
+        goal_msg.poses = [waypoint]
 
-        # Check if current waypoint is reached
-        goal_x, goal_y, goal_yaw = self.waypoints[self.current_waypoint_idx]
-
-        pos_error = math.sqrt((goal_x - self.current_x) ** 2 + (goal_y - self.current_y) ** 2)
-        yaw_error = self.angle_diff(goal_yaw, self.current_yaw)
-
-        if pos_error < self.position_tolerance and abs(yaw_error) < self.yaw_tolerance:
-            self.get_logger().info(
-                f'Reached waypoint {self.current_waypoint_idx + 1}: '
-                f'({goal_x:.2f}, {goal_y:.2f}, {goal_yaw:.2f})'
-            )
-            self.current_waypoint_idx += 1
-            self.goal_active = False
-
-    def publish_goal(self, x: float, y: float, yaw: float):
-        goal_msg = PoseStamped()
-        goal_msg.header = Header()
-        goal_msg.header.stamp = self.get_clock().now().to_msg()
-        goal_msg.header.frame_id = 'map'
-
-        goal_msg.pose.position.x = x
-        goal_msg.pose.position.y = y
-        goal_msg.pose.position.z = 0.0
-
-        qx, qy, qz, qw = self.yaw_to_quaternion(yaw)
-        goal_msg.pose.orientation.x = qx
-        goal_msg.pose.orientation.y = qy
-        goal_msg.pose.orientation.z = qz
-        goal_msg.pose.orientation.w = qw
-
-        self.goal_pub.publish(goal_msg)
         self.get_logger().info(
-            f'Published waypoint {self.current_waypoint_idx + 1}: '
-            f'({x:.2f}, {y:.2f}, {yaw:.2f})'
+            f'Sending waypoint {self.current_waypoint_index + 1}/{len(self.waypoints)}: '
+            f'x={x:.2f}, y={y:.2f}'
         )
 
-    @staticmethod
-    def yaw_to_quaternion(yaw: float):
-        qx = 0.0
-        qy = 0.0
-        qz = math.sin(yaw / 2.0)
-        qw = math.cos(yaw / 2.0)
-        return qx, qy, qz, qw
+        send_goal_future = self.action_client.send_goal_async(
+            goal_msg,
+            feedback_callback=self.feedback_callback,
+        )
+        send_goal_future.add_done_callback(self.goal_response_callback)
 
-    @staticmethod
-    def quaternion_to_yaw(x: float, y: float, z: float, w: float):
-        siny_cosp = 2.0 * (w * z + x * y)
-        cosy_cosp = 1.0 - 2.0 * (y * y + z * z)
-        return math.atan2(siny_cosp, cosy_cosp)
+    def goal_response_callback(self, future):
+        goal_handle = future.result()
+        if not goal_handle.accepted:
+            self.get_logger().error(
+                f'Waypoint {self.current_waypoint_index + 1} was rejected by Nav2.'
+            )
+            return
 
-    @staticmethod
-    def angle_diff(a: float, b: float):
-        diff = a - b
-        while diff > math.pi:
-            diff -= 2.0 * math.pi
-        while diff < -math.pi:
-            diff += 2.0 * math.pi
-        return diff
+        self.get_logger().info(
+            f'Waypoint {self.current_waypoint_index + 1} accepted. Waiting for result...'
+        )
+        get_result_future = goal_handle.get_result_async()
+        get_result_future.add_done_callback(self.result_callback)
+
+    def result_callback(self, future):
+        result = future.result()
+        status = result.status
+        missed_waypoints = result.result.missed_waypoints
+
+        if status == GoalStatus.STATUS_SUCCEEDED and len(missed_waypoints) == 0:
+            self.get_logger().info(
+                f'Waypoint {self.current_waypoint_index + 1} reached successfully.'
+            )
+            self.current_waypoint_index += 1
+            self.send_next_waypoint()
+            return
+
+        if status == GoalStatus.STATUS_SUCCEEDED and len(missed_waypoints) > 0:
+            self.get_logger().error(
+                f'Waypoint {self.current_waypoint_index + 1} reported as missed by Nav2: '
+                f'{missed_waypoints}'
+            )
+            return
+
+        self.get_logger().error(
+            f'Waypoint {self.current_waypoint_index + 1} failed with status code {status}.'
+        )
+
+    def feedback_callback(self, feedback_msg):
+        feedback = feedback_msg.feedback
+        self.get_logger().info(
+            f'Feedback for waypoint {self.current_waypoint_index + 1}: '
+            f'current waypoint index in server = {feedback.current_waypoint}'
+        )
 
 
 def main(args=None):
     rclpy.init(args=args)
-    node = WaypointNavigator()
+    node = Nav2ActionClient()
+    node.send_next_waypoint()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
