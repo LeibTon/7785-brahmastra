@@ -15,7 +15,7 @@ from std_msgs.msg import Bool
 import math
 
 
-WALL_STOP_DIST = 0.45   # metres — stop when wall is this close
+WALL_STOP_DIST = 0.5   # metres — stop when wall is this close
 FRONT_HALF_ANG = 20.0   # degrees — cone in front to check
 LINEAR_SPEED   = 0.12   # m/s forward speed
 

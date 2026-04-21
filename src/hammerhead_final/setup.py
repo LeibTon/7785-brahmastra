@@ -26,6 +26,7 @@ setup(
         'console_scripts': [
             'maze_navigator    = hammerhead_final.maze_navigator:main',
             'wall_follower     = hammerhead_final.wall_follower:main',
+            'wall_centering    = hammerhead_final.wall_centering:main',
             'sign_detector     = hammerhead_final.sign_detector:main',
             'turn_controller   = hammerhead_final.turn_controller:main',
         ],

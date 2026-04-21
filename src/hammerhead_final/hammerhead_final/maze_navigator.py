@@ -12,6 +12,9 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool, Int32
 
+DETECT_SETTLE_S = 1.5   # seconds to wait after wall stop before triggering detection
+SPIN_SETTLE_S   = 0.5   # seconds to wait after each 15° spin before detecting
+
 
 class MazeNavigator(Node):
     def __init__(self):
@@ -28,6 +31,7 @@ class MazeNavigator(Node):
 
         self._state         = 'DRIVE'
         self._spin_attempts = 0
+        self._settle_timer  = None
 
         # Wait 2s for other nodes to start, then begin
         self._startup_timer = self.create_timer(2.0, self._start)
@@ -60,7 +64,14 @@ class MazeNavigator(Node):
 
     def _wall_reached_cb(self, msg: Bool):
         if msg.data and self._state == 'DRIVE':
-            self._detect()
+            self._state = 'SETTLE'
+            self.get_logger().info('[SETTLE] waiting before detect ...')
+            self._settle_timer = self.create_timer(DETECT_SETTLE_S, self._settle_done)
+
+    def _settle_done(self):
+        self._settle_timer.cancel()
+        self._settle_timer = None
+        self._detect()
 
     def _sign_cb(self, msg: Int32):
         if self._state != 'DETECT':
@@ -69,11 +80,11 @@ class MazeNavigator(Node):
         if sign == 0:
             self._spin_attempts += 1
             self.get_logger().info(f'Empty sign, spin attempt {self._spin_attempts}')
-            if self._spin_attempts > 4:
+            if self._spin_attempts > 24:   # 24 × 15° = 360°
                 self.get_logger().warn('No sign found, driving on.')
                 self._drive()
             else:
-                self._turn(2)   # rotate 90° right to look at next wall
+                self._turn(6)   # rotate 15° right to look at next wall
         else:
             self._turn(sign)
 
@@ -82,7 +93,10 @@ class MazeNavigator(Node):
             return
         if self._state == 'TURN':
             if self._spin_attempts > 0:
-                self._detect()   # after spin-search turn, try detecting again
+                # pause briefly after each spin step before detecting
+                self._state = 'SETTLE'
+                self.get_logger().info('[SPIN SETTLE] waiting after spin ...')
+                self._settle_timer = self.create_timer(SPIN_SETTLE_S, self._settle_done)
             else:
                 self._drive()
 

@@ -113,6 +113,10 @@ class SignDetector(Node):
         _get_extractor()   # warm up once at startup
         self.get_logger().info('SignDetector ready')
 
+        self._votes        = []          # predictions collected this round
+        self._collecting   = False       # True while gathering frames
+        self._sample_timer = None
+
         self._img_sub = self.create_subscription(
             CompressedImage, '/image_raw/compressed', self._image_cb, sensor_qos)
         self._trigger_sub = self.create_subscription(
@@ -123,25 +127,42 @@ class SignDetector(Node):
         self._latest_img = msg
 
     def _trigger_cb(self, msg: Bool):
-        if not msg.data:
+        if not msg.data or self._collecting:
             return
         if self._latest_img is None:
             self.get_logger().warn('Triggered but no image received yet.')
             return
-        self._classify()
+        self._votes      = []
+        self._collecting = True
+        # Sample one frame immediately, then every 200 ms for 4 more
+        self._sample_once()
+        self._sample_timer = self.create_timer(0.2, self._sample_once)
 
-    def _classify(self):
+    def _sample_once(self):
         try:
-            bgr = _compressed_imgmsg_to_bgr(self._latest_img)
+            bgr   = _compressed_imgmsg_to_bgr(self._latest_img)
+            label = _predict(self._model, bgr)
+            self._votes.append(label)
+            self.get_logger().info(
+                f'Sample {len(self._votes)}/5: {label} ({CLASS_NAMES.get(label, "unknown")})')
         except Exception as e:
-            self.get_logger().error(f'Image conversion error: {e}')
-            return
+            self.get_logger().error(f'Sample error: {e}')
 
-        label = _predict(self._model, bgr)
-        self.get_logger().info(f'Sign: {label} ({CLASS_NAMES.get(label, "unknown")})')
+        if len(self._votes) >= 5:
+            self._sample_timer.cancel()
+            self._sample_timer = None
+            self._collecting   = False
+            self._publish_best()
 
+    def _publish_best(self):
+        counts = {}
+        for v in self._votes:
+            counts[v] = counts.get(v, 0) + 1
+        best = max(counts, key=counts.get)
+        self.get_logger().info(
+            f'Votes: {self._votes} → best={best} ({CLASS_NAMES.get(best, "unknown")})')
         out = Int32()
-        out.data = label
+        out.data = best
         self._class_pub.publish(out)
 
 
