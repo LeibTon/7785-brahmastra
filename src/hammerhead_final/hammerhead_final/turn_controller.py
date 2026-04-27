@@ -1,116 +1,173 @@
 #!/usr/bin/env python3
-"""
-Receives a sign class on /sign_class and executes the required in-place turn.
-
-Sign → action mapping
-  0  empty        → do nothing
-  1  left         → turn  90° left
-  2  right        → turn  90° right
-  3  do_not_enter → turn 180° (U-turn)
-  4  stop         → turn 180° (U-turn)
-  5  goal         → publish /goal_reached True and stop
-
-Publishes:
-  /turn_controller/done  (Bool) — True when the turn is complete
-  /goal_reached          (Bool) — True when goal sign is seen
-"""
 
 import math
 import rclpy
 from rclpy.node import Node
 
 from geometry_msgs.msg import Twist
-from std_msgs.msg import Bool, Int32
+from nav_msgs.msg import Odometry
+from std_msgs.msg import Bool, Float32, Int32
 
 
-TURN_SPEED = 0.5   # rad/s
+TURN_SPEED = 0.4
+KP_TURN    = 1.2
+ANGLE_TOL  = math.radians(1.5)
+ALIGN_TOL  = math.radians(2.0)
 
-TURN_DURATION = {
-    1:  math.pi / 2   / TURN_SPEED,          # 90° left
-    2:  math.pi / 2   / TURN_SPEED,          # 90° right
-    3:  math.pi       / TURN_SPEED,          # 180°
-    4:  math.pi       / TURN_SPEED,          # 180°
-    6:  math.radians(15) / TURN_SPEED,       # 15° left (spin-search step)
+TURN_ANGLE = {
+    1:  math.pi / 2,
+    2: -math.pi / 2,
+    3:  math.pi,
+    4:  math.pi,
+    6:  math.radians(15),
+    7: -math.radians(15),
 }
-TURN_DIRECTION = {
-    1:  1.0,   # CCW (+z)
-    2: -1.0,   # CW  (-z)
-    3:  1.0,
-    4:  1.0,
-    6:  1.0,   # CCW (+z) — 15° left
-}
+
+SKIP_ALIGN = {6, 7}
+
+IDLE  = 0
+ALIGN = 1
+TURN  = 2
+
+
+def yaw_from_odom(msg: Odometry) -> float:
+    q = msg.pose.pose.orientation
+    return math.atan2(2.0 * (q.w * q.z + q.x * q.y),
+                      1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+
+
+def normalize(a: float) -> float:
+    while a >  math.pi: a -= 2 * math.pi
+    while a <= -math.pi: a += 2 * math.pi
+    return a
+
+
+def snap_cardinal(yaw: float, yaw_init: float) -> float:
+    quarter = math.pi / 2
+    snapped = round(normalize(yaw - yaw_init) / quarter) * quarter
+    return normalize(yaw_init + snapped)
 
 
 class TurnController(Node):
     def __init__(self):
         super().__init__('turn_controller')
 
-        self._cmd_pub  = self.create_publisher(Twist, '/cmd_vel', 10)
-        self._done_pub = self.create_publisher(Bool, '/turn_controller/done', 10)
-        self._goal_pub = self.create_publisher(Bool, '/goal_reached', 10)
+        self.cmd_pub     = self.create_publisher(Twist,   '/cmd_vel', 10)
+        self.done_pub    = self.create_publisher(Bool,    '/turn_controller/done', 10)
+        self.goal_pub    = self.create_publisher(Bool,    '/goal_reached', 10)
+        self.heading_pub = self.create_publisher(Float32, '/turn_controller/heading', 10)
 
-        self._sign_sub = self.create_subscription(
-            Int32, '/sign_class', self._sign_cb, 10)
+        self.create_subscription(Int32,    '/sign_class', self.sign_cb, 10)
+        self.create_subscription(Odometry, '/odom',       self.odom_cb, 10)
 
-        self._turning      = False
-        self._turn_cmd     = Twist()
-        self._turn_end     = 0.0   # ROS time in seconds
-        self._timer = self.create_timer(0.05, self._control_loop)
+        self.yaw            = 0.0
+        self.yaw_init       = 0.0
+        self.yaw_ready      = False
+        self.target_heading = 0.0
+        self.phase          = IDLE
+        self.pending_sign   = 0
+        self.queued_sign    = None
+        self.align_target   = 0.0
+        self.turn_target    = 0.0
 
+        self.create_timer(0.05, self.control_loop)
         self.get_logger().info('TurnController ready')
 
-    def _sign_cb(self, msg: Int32):
-        if self._turning:
-            return   # ignore new signs while already turning
+    def odom_cb(self, msg: Odometry):
+        self.yaw = yaw_from_odom(msg)
+        if not self.yaw_ready:
+            self.yaw_init       = self.yaw
+            self.target_heading = self.yaw
+            self.yaw_ready      = True
+            self.publish_heading()
+            if self.queued_sign is not None:
+                queued = self.queued_sign
+                self.queued_sign = None
+                self.process_sign(queued)
 
-        sign = msg.data
+    def sign_cb(self, msg: Int32):
+        self.process_sign(msg.data)
+
+    def process_sign(self, sign: int):
+        if self.phase != IDLE:
+            return
 
         if sign == 5:
-            self.get_logger().info('Goal sign seen! Stopping.')
-            self._cmd_pub.publish(Twist())
+            self.cmd_pub.publish(Twist())
             out = Bool(); out.data = True
-            self._goal_pub.publish(out)
-            self._publish_done()
+            self.goal_pub.publish(out)
+            self.publish_done()
             return
 
-        if sign not in TURN_DURATION:
-            self.get_logger().info(f'Sign {sign}: no turn needed.')
-            self._publish_done()
+        if sign not in TURN_ANGLE:
+            self.publish_done()
             return
 
-        duration  = TURN_DURATION[sign]
-        direction = TURN_DIRECTION[sign]
-        self.get_logger().info(
-            f'Sign {sign}: turning {"left" if direction > 0 else "right"} '
-            f'for {duration:.2f}s')
-
-        self._turn_cmd.angular.z = direction * TURN_SPEED
-        self._turn_end = self.get_clock().now().nanoseconds * 1e-9 + duration
-        self._turning  = True
-
-    def _control_loop(self):
-        if not self._turning:
+        if not self.yaw_ready:
+            self.queued_sign = sign
             return
 
-        now = self.get_clock().now().nanoseconds * 1e-9
-        if now < self._turn_end:
-            self._cmd_pub.publish(self._turn_cmd)
+        if sign in SKIP_ALIGN:
+            self.align_target = self.yaw
+            self.start_turn_phase(sign)
+            return
+
+        self.align_target = snap_cardinal(self.yaw, self.yaw_init)
+        align_err = normalize(self.align_target - self.yaw)
+
+        if abs(align_err) < ALIGN_TOL:
+            self.start_turn_phase(sign)
         else:
-            self._cmd_pub.publish(Twist())   # stop
-            self._turning = False
-            self.get_logger().info('Turn complete.')
-            self._publish_done()
+            self.pending_sign = sign
+            self.phase = ALIGN
 
-    def _publish_done(self):
-        out = Bool(); out.data = True
-        self._done_pub.publish(out)
+    def control_loop(self):
+        if self.phase == IDLE or not self.yaw_ready:
+            return
+
+        if self.phase == ALIGN:
+            err = normalize(self.align_target - self.yaw)
+            if abs(err) < ALIGN_TOL:
+                self.cmd_pub.publish(Twist())
+                self.start_turn_phase(self.pending_sign)
+            else:
+                self.spin_toward(err)
+
+        elif self.phase == TURN:
+            err = normalize(self.turn_target - self.yaw)
+            if abs(err) < ANGLE_TOL:
+                self.cmd_pub.publish(Twist())
+                self.phase          = IDLE
+                self.target_heading = self.turn_target
+                self.publish_heading()
+                self.publish_done()
+            else:
+                self.spin_toward(err)
+
+    def spin_toward(self, error: float):
+        speed = max(-TURN_SPEED, min(TURN_SPEED, KP_TURN * error))
+        if abs(speed) < 0.08 and abs(error) > ANGLE_TOL:
+            speed = math.copysign(0.08, speed)
+        t = Twist()
+        t.angular.z = speed
+        self.cmd_pub.publish(t)
+
+    def start_turn_phase(self, sign: int):
+        self.turn_target = normalize(self.align_target + TURN_ANGLE[sign])
+        self.phase = TURN
+
+    def publish_heading(self):
+        m = Float32(); m.data = float(self.target_heading)
+        self.heading_pub.publish(m)
+
+    def publish_done(self):
+        m = Bool(); m.data = True
+        self.done_pub.publish(m)
 
 
 def main(args=None):
     rclpy.init(args=args)
-    node = TurnController()
-    rclpy.spin(node)
-    node.destroy_node()
+    rclpy.spin(TurnController())
     rclpy.shutdown()
 
 

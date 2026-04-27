@@ -1,23 +1,21 @@
 #!/usr/bin/env python3
-"""
-Drive straight until the LIDAR detects a wall within a threshold distance.
-Publishes /wall_reached (Bool) when stopped at a wall.
-"""
 
+import math
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan
-from std_msgs.msg import Bool
-
-import math
+from std_msgs.msg import Bool, Float32
 
 
-WALL_STOP_DIST = 0.7   # metres — stop when wall is this close
-FRONT_HALF_ANG = 20.0   # degrees — cone in front to check
-LINEAR_SPEED   = 0.12   # m/s forward speed
+WALL_STOP_DIST   = 0.5
+FRONT_HALF_ANG   = 20.0
+LINEAR_SPEED     = 0.2
+KP_HEADING       = 1.5
+MAX_HEADING_CORR = 0.4
 
 
 class WallFollower(Node):
@@ -30,27 +28,36 @@ class WallFollower(Node):
             depth=1,
         )
 
-        self._cmd_pub        = self.create_publisher(Twist, '/cmd_vel', 10)
-        self._wall_reach_pub = self.create_publisher(Bool, '/wall_reached', 10)
-        self._scan_sub       = self.create_subscription(
-            LaserScan, '/scan', self._scan_cb, sensor_qos)
+        self.cmd_pub        = self.create_publisher(Twist, '/cmd_vel', 10)
+        self.wall_reach_pub = self.create_publisher(Bool,  '/wall_reached', 10)
 
-        self._active     = False
-        self._front_dist = float('inf')
+        self.create_subscription(LaserScan, '/scan',                    self.scan_cb,    sensor_qos)
+        self.create_subscription(Bool,      '/wall_follower/enable',    self.enable_cb,  10)
+        self.create_subscription(Float32,   '/turn_controller/heading', self.heading_cb, 10)
+        self.create_subscription(Odometry,  '/odom',                    self.odom_cb,    10)
 
-        self._enable_sub = self.create_subscription(
-            Bool, '/wall_follower/enable', self._enable_cb, 10)
+        self.active         = False
+        self.front_dist     = float('inf')
+        self.yaw            = 0.0
+        self.target_heading = None
 
-        self._timer = self.create_timer(0.05, self._control_loop)
+        self.create_timer(0.05, self.control_loop)
         self.get_logger().info('WallFollower ready')
 
-    # ------------------------------------------------------------------ #
-    def _enable_cb(self, msg: Bool):
-        self._active = msg.data
-        if not self._active:
-            self._publish_cmd(0.0, 0.0)
+    def enable_cb(self, msg: Bool):
+        self.active = msg.data
+        if not self.active:
+            self.publish_cmd(0.0, 0.0)
 
-    def _scan_cb(self, msg: LaserScan):
+    def odom_cb(self, msg: Odometry):
+        q = msg.pose.pose.orientation
+        self.yaw = math.atan2(2.0 * (q.w * q.z + q.x * q.y),
+                              1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+
+    def heading_cb(self, msg: Float32):
+        self.target_heading = msg.data
+
+    def scan_cb(self, msg: LaserScan):
         ranges = []
         for i, r in enumerate(msg.ranges):
             a_deg = math.degrees(msg.angle_min + i * msg.angle_increment)
@@ -58,40 +65,39 @@ class WallFollower(Node):
             while a_deg < -180: a_deg += 360
             if abs(a_deg) <= FRONT_HALF_ANG and math.isfinite(r) and r > 0.05:
                 ranges.append(r)
+        self.front_dist = min(ranges) if ranges else float('inf')
 
-        if ranges:
-            self._front_dist = min(ranges)
-        else:
-            self._front_dist = float('inf')
-
-    def _control_loop(self):
-        if not self._active:
+    def control_loop(self):
+        if not self.active:
             return
 
-        if self._front_dist <= WALL_STOP_DIST:
-            self._publish_cmd(0.0, 0.0)
-            self._active = False
-            reached = Bool()
-            reached.data = True
-            self._wall_reach_pub.publish(reached)
-            self.get_logger().info(
-                f'Wall reached at {self._front_dist:.3f} m')
+        if self.front_dist <= WALL_STOP_DIST:
+            self.publish_cmd(0.0, 0.0)
+            self.active = False
+            m = Bool(); m.data = True
+            self.wall_reach_pub.publish(m)
+            self.get_logger().info(f'Wall reached at {self.front_dist:.3f} m')
             return
 
-        self._publish_cmd(LINEAR_SPEED, 0.0)
+        ang = 0.0
+        if self.target_heading is not None:
+            err = self.target_heading - self.yaw
+            while err >  math.pi: err -= 2 * math.pi
+            while err <= -math.pi: err += 2 * math.pi
+            ang = max(-MAX_HEADING_CORR, min(MAX_HEADING_CORR, KP_HEADING * err))
 
-    def _publish_cmd(self, linear: float, angular: float):
+        self.publish_cmd(LINEAR_SPEED, ang)
+
+    def publish_cmd(self, linear: float, angular: float):
         t = Twist()
         t.linear.x  = linear
         t.angular.z = angular
-        self._cmd_pub.publish(t)
+        self.cmd_pub.publish(t)
 
 
 def main(args=None):
     rclpy.init(args=args)
-    node = WallFollower()
-    rclpy.spin(node)
-    node.destroy_node()
+    rclpy.spin(WallFollower())
     rclpy.shutdown()
 
 
